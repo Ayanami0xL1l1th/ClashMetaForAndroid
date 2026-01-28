@@ -1,0 +1,99 @@
+name: Auto Sync Fork
+
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      # =========================
+      # main 分支：快速检查
+      # =========================
+      - name: Quick check main
+        id: check_main
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository }}.git repo_main
+          cd repo_main
+
+          UPSTREAM_HASH=$(git ls-remote https://github.com/MetaCubeX/ClashMetaForAndroid.git refs/heads/main | cut -f1)
+          LOCAL_HASH=$(git rev-parse HEAD)
+
+          if [ "$UPSTREAM_HASH" != "$LOCAL_HASH" ]; then
+            echo "need_sync=true" >> $GITHUB_OUTPUT
+          else
+            echo "need_sync=false" >> $GITHUB_OUTPUT
+          fi
+
+      # =========================
+      # update-dependencies 分支：快速检查
+      # =========================
+      - name: Quick check update-dependencies
+        id: check_update
+        run: |
+          git clone --depth 1 --branch update-dependencies https://github.com/${{ github.repository }}.git repo_update
+          cd repo_update
+
+          UPSTREAM_HASH=$(git ls-remote https://github.com/MetaCubeX/ClashMetaForAndroid.git refs/heads/update-dependencies | cut -f1)
+          LOCAL_HASH=$(git rev-parse HEAD)
+
+          if [ "$UPSTREAM_HASH" != "$LOCAL_HASH" ]; then
+            echo "need_sync=true" >> $GITHUB_OUTPUT
+          else
+            echo "need_sync=false" >> $GITHUB_OUTPUT
+          fi
+
+      # =========================
+      # 同步 main 分支
+      # =========================
+      - name: Sync main branch
+        if: steps.check_main.outputs.need_sync == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 50
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge upstream main
+        if: steps.check_main.outputs.need_sync == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream https://github.com/MetaCubeX/ClashMetaForAndroid.git
+          git fetch upstream main
+          git merge upstream/main --no-edit
+          git push origin main
+
+      # =========================
+      # 同步 update-dependencies 分支
+      # =========================
+      - name: Sync update-dependencies branch
+        if: steps.check_update.outputs.need_sync == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: update-dependencies
+          fetch-depth: 50
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge upstream update-dependencies
+        if: steps.check_update.outputs.need_sync == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream https://github.com/MetaCubeX/ClashMetaForAndroid.git
+          git fetch upstream update-dependencies
+          git merge upstream/update-dependencies --no-edit
+          git push origin update-dependencies
+
+      # =========================
+      # 无需同步提示
+      # =========================
+      - name: Done
+        if: |
+          steps.check_main.outputs.need_sync == 'false' &&
+          steps.check_update.outputs.need_sync == 'false'
+        run: echo "✅ main 与 update-dependencies 均为最新，无需同步"
