@@ -1,9 +1,9 @@
 name: Auto Sync Fork
 
-on:
-  schedule:
-    - cron: '0 12 * * *'
-  workflow_dispatch:
+#on:
+  #schedule:
+    #- cron: '0 12 * * *'
+  #workflow_dispatch:
 
 jobs:
   sync:
